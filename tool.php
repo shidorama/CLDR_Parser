@@ -12,7 +12,7 @@ class CLDRParser
 
     /**
      * CLDRParser constructor.
-     * Loads CLDR data from xml file using SimpleXML,
+     * Loads CLDR data from xml file using SimpleXML, throws errors if
      * @param string|NULL $filename
      * @throws Exception
      */
@@ -32,42 +32,51 @@ class CLDRParser
         $this->territoryData = $xml->territoryInfo;
         if (!$this->territoryData)
             throw new Exception('Required field absent!');
-        $data = NULL;
-        $xml = NULL;
     }
 
     /**
-     * @param $language
-     * @param $population
-     * @return bool
+     * Method adds prepared language data to instance variable
+     * @param string $language
+     * @param int $population
+     * @return void
      */
     private function pushLanguageData($language, $population)
     {
         $population = (int)$population;
         if (isset($this->output[$language])) {
             $this->output[$language]['population'] += $population;
-            return true;
         }
         $language = (string)$language;
         $dn = Locale::getDisplayName($language, 'en');
-        if ($dn == $language)
-            return false;
+        if (strtolower($dn) == strtolower($language))
+            trigger_error("Unable to find language name for code $dn", E_USER_NOTICE);
         $this->output[$language]['name'] = $dn;
         $this->output[$language]['population'] = $population;
-        return true;
     }
 
+
     /**
+     * Method iterates through language data and calculates overall speakers for language
      * @return $this
      */
     public function calculateLanguageData()
     {
         foreach ($this->territoryData->territory as $terr) {
+            if (!$terr) {
+                trigger_error("Got empty territory data!", E_USER_WARNING);
+                continue;
+            }
             $population = (int)$terr['population'];
+            if ($population == 0)
+                continue;
             foreach ($terr->languagePopulation as $lp) {
-                $langPopulationPrecent = (int)$lp['populationPercent'];
-                $langPopulation = round($population * $langPopulationPrecent / 100);
-                $langCode = strtoupper((string)$lp['type']);
+                $langPopulationPercent = $lp['populationPercent']?(int)$lp['populationPercent']:NULL;
+                $langCode = $lp['type']?strtoupper((string)$lp['type']):NULL;
+                if (!($langCode or $langPopulationPercent)) {
+                    trigger_error("Missing data in language population leaf!", E_USER_WARNING);
+                    continue;
+                }
+                $langPopulation = round($population * $langPopulationPercent / 100);
                 $this->pushLanguageData($langCode, $langPopulation);
             }
         }
@@ -75,6 +84,7 @@ class CLDRParser
     }
 
     /**
+     * Prints resulting language data
      * @return CLDRParser
      */
     public function printOutput()
@@ -85,12 +95,32 @@ class CLDRParser
         return $this;
     }
 
+    /**
+     * @return array
+     */
+    public function getOutput()
+    {
+        return $this->output;
+    }
+
+
 
 }
-try {
-    $x = new CLDRParser('asdas');
-    $x->calculateLanguageData()->printOutput();
-} catch (Exception $e) {
-    $msg = $e->getMessage();
-    echo 'ERROR: '.$msg;
+
+$opts = ['data::', 'help::'];
+$clArgs = getopt('' ,$opts);
+if (isset($clArgs['help']))
+    echo "Usage: tool.php [--data=<datafile>]\r\n";
+else {
+    try {
+        $data = NULL;
+        if (isset($clArgs['data']))
+            $data = (string) $clArgs['data'];
+        $x = new CLDRParser($data);
+        $x->calculateLanguageData()->printOutput();
+    } catch (Exception $e) {
+        $msg = $e->getMessage();
+        echo 'ERROR: '.$msg;
+    }
 }
+
