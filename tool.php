@@ -45,11 +45,12 @@ class CLDRParser
         $population = (int)$population;
         if (isset($this->output[$language])) {
             $this->output[$language]['population'] += $population;
+            return;
         }
         $language = (string)$language;
         $dn = Locale::getDisplayName($language, 'en');
         if (strtolower($dn) == strtolower($language))
-            trigger_error("Unable to find language name for code $dn", E_USER_NOTICE);
+            trigger_error("Unable to find language name for code $dn", E_USER_WARNING);
         $this->output[$language]['name'] = $dn;
         $this->output[$language]['population'] = $population;
     }
@@ -107,11 +108,16 @@ class CLDRParser
 
 }
 
-$opts = ['data::', 'help::'];
+$opts = ['data::', 'help::', 'verbose'];
 $clArgs = getopt('' ,$opts);
 if (isset($clArgs['help']))
-    echo "Usage: tool.php [--data=<datafile>]\r\n";
+    echo "Usage: tool.php [--data=<datafile>] [--verbose]\r\n";
 else {
+    if (isset($clArgs['verbose'])) {
+        error_reporting(E_ALL);
+    } else {
+        error_reporting(E_ERROR);
+    }
     try {
         $data = NULL;
         if (isset($clArgs['data']))
